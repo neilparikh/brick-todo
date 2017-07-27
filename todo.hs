@@ -28,7 +28,7 @@ import Brick.Util (on)
 data Task = Task String Bool -- name and if it is on the day list
     deriving Show
 
-data TodoList = TL String [Task]
+data TodoList = TL String [Task] -- FIXME: covert this to a zipper to support scrolling
               | MyDay
               | AddList
     deriving Show
@@ -37,7 +37,7 @@ data Focus = Lists
            | Tasks
            deriving Eq
 
-data CurrentState = CS [TodoList] TodoList [TodoList] Focus
+data CurrentState = CS [TodoList] TodoList [TodoList] Focus -- FIXME: use the zipper library I created to clean this up
     -- deriving Show
 
 listToName :: TodoList -> String
