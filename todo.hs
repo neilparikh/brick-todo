@@ -98,14 +98,15 @@ drawUI cs@(CS left curr right focus) = [ui]
     ui = C.hCenter . C.vCenter $ hBox [  box1 ,  box2 ]
 
 appEvent :: CurrentState -> T.BrickEvent Int e -> T.EventM Int (T.Next CurrentState)
-appEvent cs (T.VtyEvent e) =
+appEvent cs@(CS _ _ _ focus) (T.VtyEvent e) =
     case e of
-        -- FIXME: up/down doesn't work properly when the focus is on tasks
-        V.EvKey V.KUp [] -> M.continue . moveUp $ cs
-        V.EvKey (V.KChar 'k') [] -> M.continue . moveUp $ cs
+        -- FIXME: up/down is disabled when the focus is on tasks
+        -- correct fix is to move through the task list
+        V.EvKey V.KUp [] | focus == Lists -> M.continue . moveUp $ cs
+        V.EvKey (V.KChar 'k') [] | focus == Lists -> M.continue . moveUp $ cs
 
-        V.EvKey V.KDown [] -> M.continue . moveDown $ cs
-        V.EvKey (V.KChar 'j') [] -> M.continue . moveDown $ cs
+        V.EvKey V.KDown [] | focus == Lists -> M.continue . moveDown $ cs
+        V.EvKey (V.KChar 'j') [] | focus == Lists -> M.continue . moveDown $ cs
 
         V.EvKey V.KRight [] -> M.continue . moveRight $ cs
         V.EvKey (V.KChar 'l') [] -> M.continue . moveRight $ cs
@@ -133,7 +134,7 @@ moveRight (CS left curr right _) = CS left curr right Tasks
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr
     [ (L.listAttr,                V.white `on` V.blue)
-    , (L.listSelectedAttr,        V.white `on` V.blue)
+    , (L.listSelectedAttr,        V.white `on` V.black)
     , (L.listSelectedFocusedAttr, V.blue `on` V.white)
     ]
 
