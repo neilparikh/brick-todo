@@ -85,12 +85,13 @@ drawUI cs@(CS left curr right focus) = [ui]
     -- listsWidget :: L.List Int String
     listsWidget = L.listMoveBy (length left) $ L.list 1 (Vec.fromList . map listToName . flattenState $ cs) 1
     tasksWidget = L.list 2 (Vec.fromList . map taskToName . getCurrentTasks $ cs) 1
-    label = str "Lists"
-    box1 = B.borderWithLabel label $
+    label1 = str "Lists"
+    label2 = str . listToName $ curr
+    box1 = B.borderWithLabel label1 $
           hLimit 25 $
           vLimit 15 $
           L.renderList (\_ -> C.hCenter . str) (focus == Lists) listsWidget
-    box2 = B.borderWithLabel label $
+    box2 = B.borderWithLabel label2 $
           hLimit 25 $
           vLimit 15 $
           L.renderList (\_ -> C.hCenter . str) (focus == Tasks) tasksWidget
