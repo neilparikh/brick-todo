@@ -1,3 +1,4 @@
+#! /usr/bin/env runhaskell
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
@@ -34,9 +35,10 @@ data TodoList = TL String [Task]
 
 data Focus = Lists
            | Tasks
+           deriving Eq
 
-data CurrentState = CS [TodoList] TodoList [TodoList]
-    deriving Show
+data CurrentState = CS [TodoList] TodoList [TodoList] Focus
+    -- deriving Show
 
 listToName :: TodoList -> String
 listToName (TL name _) = name
@@ -47,7 +49,7 @@ taskToName :: Task -> String
 taskToName (Task name _) = name
 
 getCurrentTasks :: CurrentState -> [Task]
-getCurrentTasks cs@(CS _ curr _) = case curr of
+getCurrentTasks cs@(CS _ curr _ _) = case curr of
     MyDay -> filter isOnDay . concatMap getTasks . flattenState $ cs
     AddList -> []
     TL _ tasks -> tasks
@@ -64,10 +66,10 @@ baz :: Task
 baz = Task "Baz" False
 
 initialState :: CurrentState
-initialState = CS [MyDay] (TL "Todo" [foo]) [(TL "Work" [bar]), (TL "Projects" [baz]), AddList]
+initialState = CS [MyDay] (TL "Todo" [foo]) [(TL "Work" [bar]), (TL "Projects" [baz]), AddList] Lists
 
 flattenState :: CurrentState -> [TodoList]
-flattenState (CS left curr right) = (reverse left) ++ (curr:right)
+flattenState (CS left curr right _) = (reverse left) ++ (curr:right)
 
 getTasks :: TodoList -> [Task]
 getTasks MyDay = []
@@ -78,7 +80,7 @@ addTaskToList :: TodoList -> Task -> TodoList
 addTaskToList (TL name tasks) task = TL name (task:tasks)
 
 drawUI :: CurrentState -> [Widget Int]
-drawUI cs@(CS left curr right) = [ui]
+drawUI cs@(CS left curr right focus) = [ui]
     where
     -- listsWidget :: L.List Int String
     listsWidget = L.listMoveBy (length left) $ L.list 1 (Vec.fromList . map listToName . flattenState $ cs) 1
@@ -87,30 +89,45 @@ drawUI cs@(CS left curr right) = [ui]
     box1 = B.borderWithLabel label $
           hLimit 25 $
           vLimit 15 $
-          L.renderList (\_ -> C.hCenter . str) True listsWidget
+          L.renderList (\_ -> C.hCenter . str) (focus == Lists) listsWidget
     box2 = B.borderWithLabel label $
           hLimit 25 $
           vLimit 15 $
-          L.renderList (\_ -> C.hCenter . str) False tasksWidget
+          L.renderList (\_ -> C.hCenter . str) (focus == Tasks) tasksWidget
     ui = C.hCenter . C.vCenter $ hBox [  box1 ,  box2 ]
 
 appEvent :: CurrentState -> T.BrickEvent Int e -> T.EventM Int (T.Next CurrentState)
 appEvent cs (T.VtyEvent e) =
     case e of
+        -- FIXME: up/down doesn't work properly when the focus is on tasks
         V.EvKey V.KUp [] -> M.continue . moveUp $ cs
         V.EvKey (V.KChar 'k') [] -> M.continue . moveUp $ cs
+
         V.EvKey V.KDown [] -> M.continue . moveDown $ cs
         V.EvKey (V.KChar 'j') [] -> M.continue . moveDown $ cs
+
+        V.EvKey V.KRight [] -> M.continue . moveRight $ cs
+        V.EvKey (V.KChar 'l') [] -> M.continue . moveRight $ cs
+
+        V.EvKey V.KLeft [] -> M.continue . moveLeft $ cs
+        V.EvKey (V.KChar 'h') [] -> M.continue . moveLeft $ cs
+
         V.EvKey V.KEsc [] -> M.halt cs
         _ -> M.continue cs
 
 moveUp :: CurrentState -> CurrentState
-moveUp cs@(CS [] curr right) = cs
-moveUp (CS (x:left) curr right) = CS left x (curr:right)
+moveUp cs@(CS [] curr right _) = cs
+moveUp (CS (x:left) curr right focus) = CS left x (curr:right) focus
 
 moveDown :: CurrentState -> CurrentState
-moveDown cs@(CS left curr []) = cs
-moveDown (CS left curr (x:right)) = CS (curr:left) x right
+moveDown cs@(CS left curr [] _) = cs
+moveDown (CS left curr (x:right) focus) = CS (curr:left) x right focus
+
+moveLeft :: CurrentState -> CurrentState
+moveLeft (CS left curr right _) = CS left curr right Lists
+
+moveRight :: CurrentState -> CurrentState
+moveRight (CS left curr right _) = CS left curr right Tasks
 
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr
