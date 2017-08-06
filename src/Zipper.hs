@@ -6,6 +6,9 @@ data Zipper a = Zipper {
     right :: [a]
 } deriving Show
 
+instance Functor Zipper where
+    fmap f (Zipper l c r) = Zipper (fmap f l) (f c) (fmap f r)
+
 goRight :: Zipper a -> Zipper a
 goRight (Zipper l a (x:xs)) = Zipper (a:l) x xs
 goRight (Zipper l a []) = Zipper l a []

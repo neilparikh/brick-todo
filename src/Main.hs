@@ -1,6 +1,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Main where
+-- FIXME: Since zmy current zipper implentation only supports zippers with at
+-- least one item, if any list has zero items wiil cause an error when trying
+-- to focus on it
 
 import Control.Monad (void)
 import qualified Graphics.Vty as V
@@ -37,6 +40,13 @@ data Task = Task {
 
 data TodoList = TL String [Task]
               | MyDay
+
+modifyTasks :: ([Task] -> [Task]) -> TodoList -> TodoList
+modifyTasks _ MyDay = MyDay
+modifyTasks f (TL name tasks) = TL name (f tasks)
+
+deleteTask :: ID -> Z.Zipper TodoList -> Z.Zipper TodoList
+deleteTask i = fmap (modifyTasks (filter (\t -> taskID t /= i)))
 
 data Focus = Lists
            | Tasks
@@ -106,9 +116,21 @@ appEvent cs@(CS (Z.Zipper _ _ _) _ _) (T.VtyEvent e) =
         V.EvKey V.KLeft []       -> M.continue . moveLeft $ cs
         V.EvKey (V.KChar 'h') [] -> M.continue . moveLeft $ cs
 
+        V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentTask $ cs
+
         V.EvKey V.KEsc [] -> M.halt cs
         _ -> M.continue cs
 appEvent _ _ = error "FIXME: unhandled"
+
+deleteCurrentTask :: CurrentState -> CurrentState
+deleteCurrentTask (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
+deleteCurrentTask (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
+deleteCurrentTask cs@(CS _ Lists Nothing) = cs
+deleteCurrentTask (CS z Tasks (Just (Z.Zipper l t _))) = CS newListsZipper Tasks (Just newTasksZipper)
+    where
+    newListsZipper = deleteTask (taskID t) z
+    newTasksZipper = applyNTimes (length l) (Z.goRight) . Z.fromList . getCurrentTasks $ newListsZipper
+    applyNTimes n f = foldr (.) id (replicate n f)
 
 moveUp :: CurrentState -> CurrentState
 moveUp (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
@@ -153,8 +175,11 @@ bar = Task (ID 2) "Bar" False
 baz :: Task
 baz = Task (ID 3) "Baz" True
 
+blah :: Task
+blah = Task (ID 4) "Blah" False
+
 listTodo :: TodoList
-listTodo = TL "Todo" [foo, bar]
+listTodo = TL "Todo" [foo, bar, blah]
 
 listProjects :: TodoList
 listProjects = TL "Projects" [baz]
