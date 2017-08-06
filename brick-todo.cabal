@@ -17,6 +17,7 @@ executable brick-todo
   ghc-options: -Wall -threaded
   hs-source-dirs:      src
   main-is:             Main.hs
+  other-modules:       Zipper
   default-language:    Haskell2010
   build-depends:       base >= 4.7 && < 5,
                        brick,
