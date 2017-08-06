@@ -1,10 +1,6 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Main where
--- FIXME: focusing and scrolling on the my day list is disabled for now
--- since it's derived from the other lists, so I'm not really sure how to keep
--- track of the current positon in the list
--- One potential way to fix this would be to store a zippered list for myday
--- as well, and then update it on every modification to the other lists,
--- instead of generate myday at render time
 
 import Control.Monad (void)
 import qualified Graphics.Vty as V
@@ -12,6 +8,7 @@ import qualified Graphics.Vty as V
 import qualified Brick.Main as M
 import qualified Brick.Types as T
 import qualified Brick.Widgets.Border as B
+import Brick.Widgets.Core (fill)
 import qualified Brick.Widgets.List as L
 import qualified Brick.Widgets.Center as C
 import qualified Brick.AttrMap as A
@@ -29,70 +26,64 @@ import Brick.Util (on)
 
 import qualified Zipper as Z
 
-data Task = Task String Bool -- name and if it is on the day list
-    deriving Show
+newtype ID = ID Int
+    deriving (Eq, Enum)
 
-data TodoList = TL String (Z.Zipper Task)
+data Task = Task ID String Bool -- name and if it is on the day list
+
+data TodoList = TL String [Task]
               | MyDay
-              | AddList
-    deriving Show
 
 data Focus = Lists
            | Tasks
            deriving Eq
 
-data CurrentState = CS (Z.Zipper TodoList) Focus
-    -- deriving Show
+data CurrentState = CS (Z.Zipper TodoList) Focus (Maybe (Z.Zipper Task))
 
 listToName :: TodoList -> String
 listToName (TL name _) = name
 listToName MyDay = "My Day"
-listToName AddList = "Add List [+]"
 
 taskToName :: Task -> String
-taskToName (Task name _) = name
+taskToName (Task _ name _) = name
 
 getCurrentTasks :: Z.Zipper TodoList -> [Task]
 getCurrentTasks z@(Z.Zipper _ curr _) = case curr of
     MyDay -> filter isOnDay . concatMap getTasks . Z.toList $ z
     list -> getTasks list
     where
-    isOnDay (Task _ onDay) = onDay
+    isOnDay (Task _ _ onDay) = onDay
     getTasks MyDay = []
-    getTasks AddList = []
-    getTasks (TL _ tasks) = Z.toList tasks
+    getTasks (TL _ tasks) = tasks
 
-getCurrentTasksOffset :: Z.Zipper TodoList -> Int
-getCurrentTasksOffset (Z.Zipper _ curr _) = case curr of
-    MyDay -> 0
-    AddList -> 0
-    TL _ (Z.Zipper left _ _) -> length left
-
+tasksOffset :: Z.Zipper Task -> Int
+tasksOffset (Z.Zipper left _ _) = length left
 
 foo :: Task
-foo = Task "Foo" True
+foo = Task (ID 1) "Foo" True
 
 bar :: Task
-bar = Task "Bar" True
+bar = Task (ID 2) "Bar" True
 
 baz :: Task
-baz = Task "Baz" False
+baz = Task (ID 3) "Baz" False
 
 listTodo :: TodoList
-listTodo = TL "Todo" (Z.fromList [foo, bar])
+listTodo = TL "Todo" [foo, bar]
 
 listProjects :: TodoList
-listProjects = TL "Projects" (Z.fromList [baz])
+listProjects = TL "Projects" [baz]
 
 initialState :: CurrentState
-initialState = CS (Z.Zipper [MyDay] listTodo [listProjects, AddList]) Lists
+initialState = CS (Z.Zipper [MyDay] listTodo [listProjects]) Lists Nothing
 
 drawUI :: CurrentState -> [Widget Int]
-drawUI (CS z@(Z.Zipper left curr _) focus) = [ui]
+drawUI (CS z@(Z.Zipper left curr _) focus tasks) = [ui]
     where
-    -- listsWidget :: L.List Int String
     listsWidget = L.listMoveBy (length left) $ L.list 1 (Vec.fromList . map listToName . Z.toList $ z) 1
-    tasksWidget = L.listMoveBy (getCurrentTasksOffset z) $ L.list 2 (Vec.fromList . map taskToName . getCurrentTasks $ z) 1
+    tasksWidget = case tasks of
+        Just tasksZipper -> L.listMoveBy (tasksOffset tasksZipper) $ L.list 2 (Vec.fromList . map taskToName . Z.toList $ tasksZipper) 1
+        Nothing ->  L.list 3 (Vec.fromList []) 1
     label1 = str "Lists"
     label2 = str . listToName $ curr
     box1 = B.borderWithLabel label1 $
@@ -103,10 +94,14 @@ drawUI (CS z@(Z.Zipper left curr _) focus) = [ui]
           hLimit 25 $
           vLimit 15 $
           L.renderList (\_ -> C.hCenter . str) (focus == Tasks) tasksWidget
-    ui = C.hCenter . C.vCenter $ hBox [  box1 ,  box2 ]
+    emptyBox = B.border $
+          hLimit 25 $
+          vLimit 15 $
+          fill ' '
+    ui = C.hCenter . C.vCenter $ hBox [box1 , if (focus == Tasks) then box2 else emptyBox]
 
 appEvent :: CurrentState -> T.BrickEvent Int e -> T.EventM Int (T.Next CurrentState)
-appEvent cs@(CS (Z.Zipper _ _ _) _) (T.VtyEvent e) =
+appEvent cs@(CS (Z.Zipper _ _ _) _ _) (T.VtyEvent e) =
     case e of
         V.EvKey V.KUp []         -> M.continue . moveUp $ cs
         V.EvKey (V.KChar 'k') [] -> M.continue . moveUp $ cs
@@ -124,25 +119,24 @@ appEvent cs@(CS (Z.Zipper _ _ _) _) (T.VtyEvent e) =
         _ -> M.continue cs
 
 moveUp :: CurrentState -> CurrentState
-moveUp cs@(CS (Z.Zipper [] _ _) Lists) = cs
-moveUp (CS (Z.Zipper left (TL name curr) right) Tasks) = CS (Z.Zipper left (TL name (Z.goLeft curr)) right) Tasks
-moveUp (CS (Z.Zipper _ MyDay _) Tasks) = error "invariant violaton: focused on tasks for MyDay"
-moveUp (CS (Z.Zipper _ AddList _) Tasks) = error "invariant violaton: focused on tasks for AddList"
-moveUp (CS z focus) = CS (Z.goLeft z) focus
+moveUp cs@(CS (Z.Zipper [] _ _) Lists _) = cs
+moveUp (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goLeft tasksZipper)
+moveUp (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
+moveUp (CS z Lists Nothing) = CS (Z.goLeft z) Lists Nothing
+moveUp (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
 
 moveDown :: CurrentState -> CurrentState
-moveDown cs@(CS (Z.Zipper _ _ []) Lists) = cs
-moveDown (CS (Z.Zipper left (TL name curr) right) Tasks) = CS (Z.Zipper left (TL name (Z.goRight curr)) right) Tasks
-moveDown (CS (Z.Zipper _ MyDay _) Tasks) = error "invariant violaton: focused on tasks for MyDay"
-moveDown (CS (Z.Zipper _ AddList _) Tasks) = error "invariant violaton: focused on tasks for AddList"
-moveDown (CS z focus) = CS (Z.goRight z) focus
+moveDown cs@(CS (Z.Zipper _ _ []) Lists _) = cs
+moveDown (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goRight tasksZipper)
+moveDown (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
+moveDown (CS z Lists Nothing) = CS (Z.goRight z) Lists Nothing
+moveDown (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
 
 moveLeft :: CurrentState -> CurrentState
-moveLeft (CS z _) = CS z Lists
+moveLeft (CS z _ _) = CS z Lists Nothing
 
 moveRight :: CurrentState -> CurrentState
-moveRight (CS z@(Z.Zipper _ (TL _ _) _) _) = CS z Tasks
-moveRight (CS z _) = CS z Lists
+moveRight (CS z _ _) = CS z Tasks (Just . Z.fromList . getCurrentTasks $ z)
 
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr
