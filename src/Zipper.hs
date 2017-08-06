@@ -21,7 +21,7 @@ getCurrent :: Zipper a -> a
 getCurrent (Zipper _ x _) = x
 
 toList :: Zipper a -> [a]
-toList (Zipper l curr r) = (reverse l) ++ (curr:r)
+toList (Zipper l c r) = (reverse l) ++ (c:r)
 
 fromList :: [a] -> Zipper a
 fromList [] = error "empty list cannot be made to zipper"

@@ -56,33 +56,27 @@ getCurrentTasks z@(Z.Zipper _ curr _) = case curr of
     getTasks MyDay = []
     getTasks (TL _ tasks) = tasks
 
-foo :: Task
-foo = Task (ID 1) "Foo" True
+zipperOffset :: Z.Zipper a -> Int
+zipperOffset = length . Z.left
 
-bar :: Task
-bar = Task (ID 2) "Bar" True
+listNames :: Z.Zipper TodoList -> [String]
+listNames = map listToName . Z.toList
 
-baz :: Task
-baz = Task (ID 3) "Baz" False
+taskNames :: Z.Zipper Task -> [String]
+taskNames = map taskName . Z.toList
 
-listTodo :: TodoList
-listTodo = TL "Todo" [foo, bar]
-
-listProjects :: TodoList
-listProjects = TL "Projects" [baz]
-
-initialState :: CurrentState
-initialState = CS (Z.Zipper [MyDay] listTodo [listProjects]) Lists Nothing
+currentListName :: Z.Zipper TodoList -> String
+currentListName = listToName . Z.curr
 
 drawUI :: CurrentState -> [Widget Int]
-drawUI (CS z@(Z.Zipper left curr _) focus tasks) = [ui]
+drawUI (CS z focus tasks) = [ui]
     where
-    listsWidget = L.listMoveBy (length left) $ L.list 1 (Vec.fromList . map listToName . Z.toList $ z) 1
+    listsWidget = L.listMoveBy (zipperOffset z) $ L.list 1 (Vec.fromList . listNames $ z) 1
     tasksWidget = case tasks of
-        Just tasksZipper -> L.listMoveBy (length . Z.left $ tasksZipper) $ L.list 2 (Vec.fromList . map taskName . Z.toList $ tasksZipper) 1
+        Just tasksZipper -> L.listMoveBy (zipperOffset tasksZipper) $ L.list 2 (Vec.fromList . taskNames $ tasksZipper) 1
         Nothing ->  L.list 3 (Vec.fromList []) 1
     label1 = str "Lists"
-    label2 = str . listToName $ curr
+    label2 = str . currentListName $ z
     box1 = B.borderWithLabel label1 $
           hLimit 25 $
           vLimit 15 $
@@ -150,6 +144,24 @@ theApp =
           , M.appStartEvent = return
           , M.appAttrMap = const theMap
           }
+
+foo :: Task
+foo = Task (ID 1) "Foo" True
+
+bar :: Task
+bar = Task (ID 2) "Bar" False
+
+baz :: Task
+baz = Task (ID 3) "Baz" True
+
+listTodo :: TodoList
+listTodo = TL "Todo" [foo, bar]
+
+listProjects :: TodoList
+listProjects = TL "Projects" [baz]
+
+initialState :: CurrentState
+initialState = CS (Z.Zipper [MyDay] listTodo [listProjects]) Lists Nothing
 
 main :: IO ()
 main = void $ M.defaultMain theApp initialState
