@@ -108,6 +108,7 @@ appEvent cs@(CS (Z.Zipper _ _ _) _ _) (T.VtyEvent e) =
 
         V.EvKey V.KEsc [] -> M.halt cs
         _ -> M.continue cs
+appEvent _ _ = error "FIXME: unhandled"
 
 moveUp :: CurrentState -> CurrentState
 moveUp cs@(CS (Z.Zipper [] _ _) Lists _) = cs
