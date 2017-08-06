@@ -29,7 +29,11 @@ import qualified Zipper as Z
 newtype ID = ID Int
     deriving (Eq, Enum)
 
-data Task = Task ID String Bool -- name and if it is on the day list
+data Task = Task {
+    taskID :: ID,
+    taskName :: String,
+    taskOnDay :: Bool
+}
 
 data TodoList = TL String [Task]
               | MyDay
@@ -44,20 +48,13 @@ listToName :: TodoList -> String
 listToName (TL name _) = name
 listToName MyDay = "My Day"
 
-taskToName :: Task -> String
-taskToName (Task _ name _) = name
-
 getCurrentTasks :: Z.Zipper TodoList -> [Task]
 getCurrentTasks z@(Z.Zipper _ curr _) = case curr of
-    MyDay -> filter isOnDay . concatMap getTasks . Z.toList $ z
+    MyDay -> filter taskOnDay . concatMap getTasks . Z.toList $ z
     list -> getTasks list
     where
-    isOnDay (Task _ _ onDay) = onDay
     getTasks MyDay = []
     getTasks (TL _ tasks) = tasks
-
-tasksOffset :: Z.Zipper Task -> Int
-tasksOffset (Z.Zipper left _ _) = length left
 
 foo :: Task
 foo = Task (ID 1) "Foo" True
@@ -82,7 +79,7 @@ drawUI (CS z@(Z.Zipper left curr _) focus tasks) = [ui]
     where
     listsWidget = L.listMoveBy (length left) $ L.list 1 (Vec.fromList . map listToName . Z.toList $ z) 1
     tasksWidget = case tasks of
-        Just tasksZipper -> L.listMoveBy (tasksOffset tasksZipper) $ L.list 2 (Vec.fromList . map taskToName . Z.toList $ tasksZipper) 1
+        Just tasksZipper -> L.listMoveBy (length . Z.left $ tasksZipper) $ L.list 2 (Vec.fromList . map taskName . Z.toList $ tasksZipper) 1
         Nothing ->  L.list 3 (Vec.fromList []) 1
     label1 = str "Lists"
     label2 = str . listToName $ curr

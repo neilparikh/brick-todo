@@ -1,23 +1,27 @@
 module Zipper where
 
-data Zipper a = Zipper [a] a [a] deriving Show
+data Zipper a = Zipper {
+    left :: [a],
+    curr :: a,
+    right :: [a]
+} deriving Show
 
 goRight :: Zipper a -> Zipper a
-goRight (Zipper left a (x:xs)) = Zipper (a:left) x xs
-goRight (Zipper left a []) = Zipper left a []
+goRight (Zipper l a (x:xs)) = Zipper (a:l) x xs
+goRight (Zipper l a []) = Zipper l a []
 
 goLeft :: Zipper a -> Zipper a
-goLeft (Zipper (x:xs) a right) = Zipper xs x (a:right)
-goLeft (Zipper [] a right) = Zipper [] a right
+goLeft (Zipper (x:xs) a r) = Zipper xs x (a:r)
+goLeft (Zipper [] a r) = Zipper [] a r
 
 updateCurrent :: (a -> a) -> Zipper a -> Zipper a
-updateCurrent f (Zipper left x right) = Zipper left (f x) right
+updateCurrent f (Zipper l x r) = Zipper l (f x) r
 
 getCurrent :: Zipper a -> a
 getCurrent (Zipper _ x _) = x
 
 toList :: Zipper a -> [a]
-toList (Zipper left curr right) = (reverse left) ++ (curr:right)
+toList (Zipper l curr r) = (reverse l) ++ (curr:r)
 
 fromList :: [a] -> Zipper a
 fromList [] = error "empty list cannot be made to zipper"
