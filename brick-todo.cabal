@@ -7,8 +7,8 @@ license:             BSD3
 license-file:        LICENSE
 author:              Neil Parikh
 maintainer:          parikh.neil@me.com
-copyright:           (C) 2016 Neil Parikh
-category:            Web
+copyright:           (C) 2017 Neil Parikh
+category:            Console
 build-type:          Simple
 cabal-version:       >=1.10
 extra-source-files:  README.md
