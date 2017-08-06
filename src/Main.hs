@@ -27,7 +27,7 @@ import Brick.Widgets.Core
   )
 import Brick.Util (on)
 
-import qualified Zipper as Z
+import qualified NonEmptyZipper as NEZ
 
 newtype ID = ID Int
     deriving (Eq, Enum)
@@ -45,38 +45,38 @@ modifyTasks :: ([Task] -> [Task]) -> TodoList -> TodoList
 modifyTasks _ MyDay = MyDay
 modifyTasks f (TL name tasks) = TL name (f tasks)
 
-deleteTask :: ID -> Z.Zipper TodoList -> Z.Zipper TodoList
+deleteTask :: ID -> NEZ.Zipper TodoList -> NEZ.Zipper TodoList
 deleteTask i = fmap (modifyTasks (filter (\t -> taskID t /= i)))
 
 data Focus = Lists
            | Tasks
            deriving Eq
 
-data CurrentState = CS (Z.Zipper TodoList) Focus (Maybe (Z.Zipper Task))
+data CurrentState = CS (NEZ.Zipper TodoList) Focus (Maybe (NEZ.Zipper Task))
 
 listToName :: TodoList -> String
 listToName (TL name _) = name
 listToName MyDay = "My Day"
 
-getCurrentTasks :: Z.Zipper TodoList -> [Task]
-getCurrentTasks z@(Z.Zipper _ curr _) = case curr of
-    MyDay -> filter taskOnDay . concatMap getTasks . Z.toList $ z
+getCurrentTasks :: NEZ.Zipper TodoList -> [Task]
+getCurrentTasks z@(NEZ.Zipper _ curr _) = case curr of
+    MyDay -> filter taskOnDay . concatMap getTasks . NEZ.toList $ z
     list -> getTasks list
     where
     getTasks MyDay = []
     getTasks (TL _ tasks) = tasks
 
-zipperOffset :: Z.Zipper a -> Int
-zipperOffset = length . Z.left
+zipperOffset :: NEZ.Zipper a -> Int
+zipperOffset = length . NEZ.left
 
-listNames :: Z.Zipper TodoList -> [String]
-listNames = map listToName . Z.toList
+listNames :: NEZ.Zipper TodoList -> [String]
+listNames = map listToName . NEZ.toList
 
-taskNames :: Z.Zipper Task -> [String]
-taskNames = map taskName . Z.toList
+taskNames :: NEZ.Zipper Task -> [String]
+taskNames = map taskName . NEZ.toList
 
-currentListName :: Z.Zipper TodoList -> String
-currentListName = listToName . Z.curr
+currentListName :: NEZ.Zipper TodoList -> String
+currentListName = listToName . NEZ.curr
 
 drawUI :: CurrentState -> [Widget Int]
 drawUI (CS z focus tasks) = [ui]
@@ -102,7 +102,7 @@ drawUI (CS z focus tasks) = [ui]
     ui = C.hCenter . C.vCenter $ hBox [box1 , if (focus == Tasks) then box2 else emptyBox]
 
 appEvent :: CurrentState -> T.BrickEvent Int e -> T.EventM Int (T.Next CurrentState)
-appEvent cs@(CS (Z.Zipper _ _ _) _ _) (T.VtyEvent e) =
+appEvent cs@(CS (NEZ.Zipper _ _ _) _ _) (T.VtyEvent e) =
     case e of
         V.EvKey V.KUp []         -> M.continue . moveUp $ cs
         V.EvKey (V.KChar 'k') [] -> M.continue . moveUp $ cs
@@ -126,29 +126,29 @@ deleteCurrentTask :: CurrentState -> CurrentState
 deleteCurrentTask (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
 deleteCurrentTask (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
 deleteCurrentTask cs@(CS _ Lists Nothing) = cs
-deleteCurrentTask (CS z Tasks (Just (Z.Zipper l t _))) = CS newListsZipper Tasks (Just newTasksZipper)
+deleteCurrentTask (CS z Tasks (Just (NEZ.Zipper l t _))) = CS newListsZipper Tasks (Just newTasksZipper)
     where
     newListsZipper = deleteTask (taskID t) z
-    newTasksZipper = applyNTimes (length l) (Z.goRight) . Z.fromList . getCurrentTasks $ newListsZipper
+    newTasksZipper = applyNTimes (length l) (NEZ.goRight) . NEZ.fromList . getCurrentTasks $ newListsZipper
     applyNTimes n f = foldr (.) id (replicate n f)
 
 moveUp :: CurrentState -> CurrentState
 moveUp (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
 moveUp (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
-moveUp (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goLeft tasksZipper)
-moveUp (CS z Lists Nothing) = CS (Z.goLeft z) Lists Nothing
+moveUp (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ NEZ.goLeft tasksZipper)
+moveUp (CS z Lists Nothing) = CS (NEZ.goLeft z) Lists Nothing
 
 moveDown :: CurrentState -> CurrentState
 moveDown (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
 moveDown (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
-moveDown (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goRight tasksZipper)
-moveDown (CS z Lists Nothing) = CS (Z.goRight z) Lists Nothing
+moveDown (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ NEZ.goRight tasksZipper)
+moveDown (CS z Lists Nothing) = CS (NEZ.goRight z) Lists Nothing
 
 moveLeft :: CurrentState -> CurrentState
 moveLeft (CS z _ _) = CS z Lists Nothing
 
 moveRight :: CurrentState -> CurrentState
-moveRight (CS z _ _) = CS z Tasks (Just . Z.fromList . getCurrentTasks $ z)
+moveRight (CS z _ _) = CS z Tasks (Just . NEZ.fromList . getCurrentTasks $ z)
 
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr
@@ -185,7 +185,7 @@ listProjects :: TodoList
 listProjects = TL "Projects" [baz]
 
 initialState :: CurrentState
-initialState = CS (Z.Zipper [MyDay] listTodo [listProjects]) Lists Nothing
+initialState = CS (NEZ.Zipper [MyDay] listTodo [listProjects]) Lists Nothing
 
 main :: IO ()
 main = void $ M.defaultMain theApp initialState

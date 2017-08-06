@@ -1,4 +1,4 @@
-module Zipper where
+module NonEmptyZipper where
 
 data Zipper a = Zipper {
     left :: [a],
