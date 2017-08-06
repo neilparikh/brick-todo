@@ -1,5 +1,3 @@
-#! /usr/bin/env runhaskell
-{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Main where
 -- FIXME: focusing and scrolling on the my day list is disabled for now
 -- since it's derived from the other lists, so I'm not really sure how to keep
@@ -25,9 +23,7 @@ import Brick.Widgets.Core
   ( str
   , vLimit
   , hLimit
-  , vBox
   , hBox
-  , withAttr
   )
 import Brick.Util (on)
 
@@ -67,7 +63,7 @@ getCurrentTasks z@(Z.Zipper _ curr _) = case curr of
     getTasks (TL _ tasks) = Z.toList tasks
 
 getCurrentTasksOffset :: Z.Zipper TodoList -> Int
-getCurrentTasksOffset z@(Z.Zipper _ curr _) = case curr of
+getCurrentTasksOffset (Z.Zipper _ curr _) = case curr of
     MyDay -> 0
     AddList -> 0
     TL _ (Z.Zipper left _ _) -> length left
@@ -92,7 +88,7 @@ initialState :: CurrentState
 initialState = CS (Z.Zipper [MyDay] listTodo [listProjects, AddList]) Lists
 
 drawUI :: CurrentState -> [Widget Int]
-drawUI (CS z@(Z.Zipper left curr right) focus) = [ui]
+drawUI (CS z@(Z.Zipper left curr _) focus) = [ui]
     where
     -- listsWidget :: L.List Int String
     listsWidget = L.listMoveBy (length left) $ L.list 1 (Vec.fromList . map listToName . Z.toList $ z) 1
@@ -110,7 +106,7 @@ drawUI (CS z@(Z.Zipper left curr right) focus) = [ui]
     ui = C.hCenter . C.vCenter $ hBox [  box1 ,  box2 ]
 
 appEvent :: CurrentState -> T.BrickEvent Int e -> T.EventM Int (T.Next CurrentState)
-appEvent cs@(CS (Z.Zipper _ _ _) focus) (T.VtyEvent e) =
+appEvent cs@(CS (Z.Zipper _ _ _) _) (T.VtyEvent e) =
     case e of
         V.EvKey V.KUp []         -> M.continue . moveUp $ cs
         V.EvKey (V.KChar 'k') [] -> M.continue . moveUp $ cs
@@ -128,17 +124,17 @@ appEvent cs@(CS (Z.Zipper _ _ _) focus) (T.VtyEvent e) =
         _ -> M.continue cs
 
 moveUp :: CurrentState -> CurrentState
-moveUp cs@(CS (Z.Zipper [] curr right) Lists) = cs
+moveUp cs@(CS (Z.Zipper [] _ _) Lists) = cs
 moveUp (CS (Z.Zipper left (TL name curr) right) Tasks) = CS (Z.Zipper left (TL name (Z.goLeft curr)) right) Tasks
-moveUp (CS (Z.Zipper left MyDay right) Tasks) = error "invariant violaton: focused on tasks for MyDay"
-moveUp (CS (Z.Zipper left AddList right) Tasks) = error "invariant violaton: focused on tasks for AddList"
+moveUp (CS (Z.Zipper _ MyDay _) Tasks) = error "invariant violaton: focused on tasks for MyDay"
+moveUp (CS (Z.Zipper _ AddList _) Tasks) = error "invariant violaton: focused on tasks for AddList"
 moveUp (CS z focus) = CS (Z.goLeft z) focus
 
 moveDown :: CurrentState -> CurrentState
-moveDown cs@(CS (Z.Zipper left curr []) Lists) = cs
+moveDown cs@(CS (Z.Zipper _ _ []) Lists) = cs
 moveDown (CS (Z.Zipper left (TL name curr) right) Tasks) = CS (Z.Zipper left (TL name (Z.goRight curr)) right) Tasks
-moveDown (CS (Z.Zipper left MyDay right) Tasks) = error "invariant violaton: focused on tasks for MyDay"
-moveDown (CS (Z.Zipper left AddList right) Tasks) = error "invariant violaton: focused on tasks for AddList"
+moveDown (CS (Z.Zipper _ MyDay _) Tasks) = error "invariant violaton: focused on tasks for MyDay"
+moveDown (CS (Z.Zipper _ AddList _) Tasks) = error "invariant violaton: focused on tasks for AddList"
 moveDown (CS z focus) = CS (Z.goRight z) focus
 
 moveLeft :: CurrentState -> CurrentState
