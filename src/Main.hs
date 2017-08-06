@@ -111,18 +111,16 @@ appEvent cs@(CS (Z.Zipper _ _ _) _ _) (T.VtyEvent e) =
 appEvent _ _ = error "FIXME: unhandled"
 
 moveUp :: CurrentState -> CurrentState
-moveUp cs@(CS (Z.Zipper [] _ _) Lists _) = cs
-moveUp (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goLeft tasksZipper)
-moveUp (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
-moveUp (CS z Lists Nothing) = CS (Z.goLeft z) Lists Nothing
 moveUp (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
+moveUp (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
+moveUp (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goLeft tasksZipper)
+moveUp (CS z Lists Nothing) = CS (Z.goLeft z) Lists Nothing
 
 moveDown :: CurrentState -> CurrentState
-moveDown cs@(CS (Z.Zipper _ _ []) Lists _) = cs
-moveDown (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goRight tasksZipper)
-moveDown (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
-moveDown (CS z Lists Nothing) = CS (Z.goRight z) Lists Nothing
 moveDown (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
+moveDown (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
+moveDown (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goRight tasksZipper)
+moveDown (CS z Lists Nothing) = CS (Z.goRight z) Lists Nothing
 
 moveLeft :: CurrentState -> CurrentState
 moveLeft (CS z _ _) = CS z Lists Nothing
