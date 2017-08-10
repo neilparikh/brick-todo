@@ -1,9 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Main where
--- FIXME: Since zmy current zipper implentation only supports zippers with at
--- least one item, if any list has zero items wiil cause an error when trying
--- to focus on it
 
 import Control.Monad (void)
 import qualified Graphics.Vty as V
@@ -28,6 +25,7 @@ import Brick.Widgets.Core
 import Brick.Util (on)
 
 import qualified NonEmptyZipper as NEZ
+import qualified Zipper as Z
 
 newtype ID = ID Int
     deriving (Eq, Enum)
@@ -52,7 +50,7 @@ data Focus = Lists
            | Tasks
            deriving Eq
 
-data CurrentState = CS (NEZ.Zipper TodoList) Focus (Maybe (NEZ.Zipper Task))
+data CurrentState = CS (NEZ.Zipper TodoList) Focus (Maybe (Z.Zipper Task))
 
 listToName :: TodoList -> String
 listToName (TL name _) = name
@@ -66,14 +64,11 @@ getCurrentTasks z@(NEZ.Zipper _ curr _) = case curr of
     getTasks MyDay = []
     getTasks (TL _ tasks) = tasks
 
-zipperOffset :: NEZ.Zipper a -> Int
-zipperOffset = length . NEZ.left
-
 listNames :: NEZ.Zipper TodoList -> [String]
 listNames = map listToName . NEZ.toList
 
-taskNames :: NEZ.Zipper Task -> [String]
-taskNames = map taskName . NEZ.toList
+taskNames :: Z.Zipper Task -> [String]
+taskNames = map taskName . Z.toList
 
 currentListName :: NEZ.Zipper TodoList -> String
 currentListName = listToName . NEZ.curr
@@ -81,9 +76,9 @@ currentListName = listToName . NEZ.curr
 drawUI :: CurrentState -> [Widget Int]
 drawUI (CS z focus tasks) = [ui]
     where
-    listsWidget = L.listMoveBy (zipperOffset z) $ L.list 1 (Vec.fromList . listNames $ z) 1
+    listsWidget = L.listMoveBy (NEZ.offset z) $ L.list 1 (Vec.fromList . listNames $ z) 1
     tasksWidget = case tasks of
-        Just tasksZipper -> L.listMoveBy (zipperOffset tasksZipper) $ L.list 2 (Vec.fromList . taskNames $ tasksZipper) 1
+        Just tasksZipper -> L.listMoveBy (Z.offset tasksZipper) $ L.list 2 (Vec.fromList . taskNames $ tasksZipper) 1
         Nothing ->  L.list 3 (Vec.fromList []) 1
     label1 = str "Lists"
     label2 = str . currentListName $ z
@@ -125,30 +120,32 @@ appEvent _ _ = error "FIXME: unhandled"
 deleteCurrentTask :: CurrentState -> CurrentState
 deleteCurrentTask (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
 deleteCurrentTask (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
+deleteCurrentTask (CS _ Tasks (Just (Z.Zipper (_:_) []))) = error "invariant violation: zipper with non empty left but empty right"
 deleteCurrentTask cs@(CS _ Lists Nothing) = cs
-deleteCurrentTask (CS z Tasks (Just (NEZ.Zipper l t _))) = CS newListsZipper Tasks (Just newTasksZipper)
+deleteCurrentTask cs@(CS _ Tasks (Just (Z.Zipper [] []))) = cs
+deleteCurrentTask (CS z Tasks (Just (Z.Zipper l (t:_)))) = CS newListsZipper Tasks (Just newTasksZipper)
     where
     newListsZipper = deleteTask (taskID t) z
-    newTasksZipper = applyNTimes (length l) (NEZ.goRight) . NEZ.fromList . getCurrentTasks $ newListsZipper
+    newTasksZipper = applyNTimes (length l) (Z.goRight) . Z.fromList . getCurrentTasks $ newListsZipper
     applyNTimes n f = foldr (.) id (replicate n f)
 
 moveUp :: CurrentState -> CurrentState
 moveUp (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
 moveUp (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
-moveUp (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ NEZ.goLeft tasksZipper)
+moveUp (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goLeft tasksZipper)
 moveUp (CS z Lists Nothing) = CS (NEZ.goLeft z) Lists Nothing
 
 moveDown :: CurrentState -> CurrentState
 moveDown (CS _ Lists (Just _)) = error "invariant violation: focused on lists with tasks zipper"
 moveDown (CS _ Tasks Nothing) = error "invariant violation: focused on tasks with no tasks zipper"
-moveDown (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ NEZ.goRight tasksZipper)
+moveDown (CS z Tasks (Just tasksZipper)) = CS z Tasks (Just $ Z.goRight tasksZipper)
 moveDown (CS z Lists Nothing) = CS (NEZ.goRight z) Lists Nothing
 
 moveLeft :: CurrentState -> CurrentState
 moveLeft (CS z _ _) = CS z Lists Nothing
 
 moveRight :: CurrentState -> CurrentState
-moveRight (CS z _ _) = CS z Tasks (Just . NEZ.fromList . getCurrentTasks $ z)
+moveRight (CS z _ _) = CS z Tasks (Just . Z.fromList . getCurrentTasks $ z)
 
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr

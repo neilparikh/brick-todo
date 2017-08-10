@@ -29,3 +29,6 @@ toList (Zipper l c r) = (reverse l) ++ (c:r)
 fromList :: [a] -> Zipper a
 fromList [] = error "empty list cannot be made to zipper"
 fromList (x:xs) = Zipper [] x xs
+
+offset :: Zipper a -> Int
+offset = length . left
