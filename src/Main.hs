@@ -8,7 +8,6 @@ import qualified Graphics.Vty as V
 import qualified Brick.Main as M
 import qualified Brick.Types as T
 import qualified Brick.Widgets.Border as B
-import Brick.Widgets.Core (fill)
 import qualified Brick.Widgets.List as L
 import qualified Brick.Widgets.Center as C
 import qualified Brick.AttrMap as A
@@ -21,6 +20,7 @@ import Brick.Widgets.Core
   , vLimit
   , hLimit
   , hBox
+  , fill
   )
 import Brick.Util (on)
 
@@ -94,10 +94,10 @@ drawUI (CS z focus tasks) = [ui]
           hLimit 25 $
           vLimit 15 $
           fill ' '
-    ui = C.hCenter . C.vCenter $ hBox [box1 , if (focus == Tasks) then box2 else emptyBox]
+    ui = C.hCenter . C.vCenter $ hBox [box1 , if focus == Tasks then box2 else emptyBox]
 
 appEvent :: CurrentState -> T.BrickEvent Int e -> T.EventM Int (T.Next CurrentState)
-appEvent cs@(CS (NEZ.Zipper _ _ _) _ _) (T.VtyEvent e) =
+appEvent cs@(CS NEZ.Zipper{} _ _) (T.VtyEvent e) =
     case e of
         V.EvKey V.KUp []         -> M.continue . moveUp $ cs
         V.EvKey (V.KChar 'k') [] -> M.continue . moveUp $ cs
@@ -126,7 +126,7 @@ deleteCurrentTask cs@(CS _ Tasks (Just (Z.Zipper [] []))) = cs
 deleteCurrentTask (CS z Tasks (Just (Z.Zipper l (t:_)))) = CS newListsZipper Tasks (Just newTasksZipper)
     where
     newListsZipper = deleteTask (taskID t) z
-    newTasksZipper = applyNTimes (length l) (Z.goRight) . Z.fromList . getCurrentTasks $ newListsZipper
+    newTasksZipper = applyNTimes (length l) Z.goRight . Z.fromList . getCurrentTasks $ newListsZipper
     applyNTimes n f = foldr (.) id (replicate n f)
 
 moveUp :: CurrentState -> CurrentState

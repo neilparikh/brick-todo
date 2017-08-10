@@ -19,7 +19,7 @@ goLeft (Zipper (x:xs) r) = Zipper xs (x:r)
 goLeft (Zipper [] r) = Zipper [] r
 
 updateCurrent :: (a -> a) -> Zipper a -> Zipper a
-updateCurrent f (Zipper l (x:xs)) = Zipper l ((f x):xs)
+updateCurrent f (Zipper l (x:xs)) = Zipper l (f x : xs)
 updateCurrent _ z@(Zipper _ []) = z
 
 getCurrent :: Zipper a -> Maybe a
@@ -27,7 +27,7 @@ getCurrent (Zipper _ (x:_)) = Just x
 getCurrent (Zipper _ []) = Nothing
 
 toList :: Zipper a -> [a]
-toList (Zipper l r) = (reverse l) ++ (r)
+toList (Zipper l r) = reverse l ++ r
 
 fromList :: [a] -> Zipper a
 fromList [] = Zipper [] []
