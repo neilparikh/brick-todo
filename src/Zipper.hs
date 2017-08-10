@@ -23,7 +23,7 @@ updateCurrent f (Zipper l (x:xs)) = Zipper l ((f x):xs)
 updateCurrent _ z@(Zipper _ []) = z
 
 getCurrent :: Zipper a -> Maybe a
-getCurrent (Zipper _ (x:xs)) = Just x
+getCurrent (Zipper _ (x:_)) = Just x
 getCurrent (Zipper _ []) = Nothing
 
 toList :: Zipper a -> [a]
