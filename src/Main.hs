@@ -73,13 +73,13 @@ taskNames = map taskName . Z.toList
 currentListName :: NEZ.Zipper TodoList -> String
 currentListName = listToName . NEZ.curr
 
-drawUI :: CurrentState -> [Widget Int]
+drawUI :: CurrentState -> [Widget String]
 drawUI (CS z focus tasks) = [ui]
     where
-    listsWidget = L.listMoveBy (NEZ.offset z) $ L.list 1 (Vec.fromList . listNames $ z) 1
+    listsWidget = L.listMoveBy (NEZ.offset z) $ L.list "Lists" (Vec.fromList . listNames $ z) 1
     tasksWidget = case tasks of
-        Just tasksZipper -> L.listMoveBy (Z.offset tasksZipper) $ L.list 2 (Vec.fromList . taskNames $ tasksZipper) 1
-        Nothing ->  L.list 3 (Vec.fromList []) 1
+        Just tasksZipper -> L.listMoveBy (Z.offset tasksZipper) $ L.list (currentListName z) (Vec.fromList . taskNames $ tasksZipper) 1
+        Nothing -> L.list "Tasks" (Vec.fromList []) 1
     label1 = str "Lists"
     label2 = str . currentListName $ z
     box1 = B.borderWithLabel label1 $
@@ -96,7 +96,7 @@ drawUI (CS z focus tasks) = [ui]
           fill ' '
     ui = C.hCenter . C.vCenter $ hBox [box1 , if focus == Tasks then box2 else emptyBox]
 
-appEvent :: CurrentState -> T.BrickEvent Int e -> T.EventM Int (T.Next CurrentState)
+appEvent :: CurrentState -> T.BrickEvent String e -> T.EventM String (T.Next CurrentState)
 appEvent cs@(CS NEZ.Zipper{} _ _) (T.VtyEvent e) =
     case e of
         V.EvKey V.KUp []         -> M.continue . moveUp $ cs
@@ -154,7 +154,7 @@ theMap = A.attrMap V.defAttr
     , (L.listSelectedFocusedAttr, V.blue `on` V.white)
     ]
 
-theApp :: M.App CurrentState e Int
+theApp :: M.App CurrentState e String
 theApp =
     M.App { M.appDraw = drawUI
           , M.appChooseCursor = M.showFirstCursor
