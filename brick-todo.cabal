@@ -23,4 +23,5 @@ executable brick-todo
   build-depends:       base >= 4.7 && < 5,
                        brick,
                        vty,
-                       vector
+                       vector,
+                       text-zipper
