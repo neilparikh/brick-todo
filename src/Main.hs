@@ -51,7 +51,7 @@ deleteTask i = fmap (modifyTasks (filter (\t -> taskID t /= i)))
 
 data Focus = Lists
            | Tasks
-           deriving Eq
+           deriving (Show, Eq)
 
 data CurrentState = CS (NEZ.Zipper TodoList) Focus (Maybe (Z.Zipper Task)) (Maybe (E.Editor String String))
 
@@ -91,11 +91,11 @@ drawUI (CS z focus tasks editor) = [ui]
     box1 = B.borderWithLabel label1 $
           hLimit 25 $
           vLimit 15 $
-          L.renderList (\_ -> C.hCenter . str) (focus == Lists) listsWidget
+          vBox $ [L.renderList (\_ -> C.hCenter . str) (focus == Lists) listsWidget] ++ (if focus == Lists then [editWidget] else [])
     box2 = B.borderWithLabel label2 $
           hLimit 25 $
           vLimit 15 $
-          vBox [L.renderList (\_ -> C.hCenter . str) (focus == Tasks) tasksWidget, editWidget]
+          vBox $ [L.renderList (\_ -> C.hCenter . str) (focus == Tasks) tasksWidget] ++ (if focus == Tasks then [editWidget] else [])
     emptyBox = B.border $
           hLimit 25 $
           vLimit 15 $
@@ -118,7 +118,7 @@ appEvent cs@(CS lists focus tasks Nothing) (T.VtyEvent e) =
         V.EvKey (V.KChar 'h') [] -> M.continue . moveLeft $ cs
 
         V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentTask $ cs
-        V.EvKey (V.KChar 'e') [] -> M.continue $ CS lists focus tasks (Just $ E.applyEdit TZ.gotoEOL $ E.editor "editor" (Just 1) "foo bar")
+        V.EvKey (V.KChar 'e') [] -> M.continue $ CS lists focus tasks (Just $ E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) "foo bar")
 
         V.EvKey V.KEsc [] -> M.halt cs
         _ -> M.continue cs
