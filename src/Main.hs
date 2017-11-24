@@ -117,7 +117,7 @@ appEvent cs@(CS lists focus tasks Nothing) (T.VtyEvent e) =
         V.EvKey V.KLeft []       -> M.continue . moveLeft $ cs
         V.EvKey (V.KChar 'h') [] -> M.continue . moveLeft $ cs
 
-        V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentTask $ cs
+        V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentItem $ cs
         V.EvKey (V.KChar 'e') [] -> M.continue $ CS lists focus tasks (Just $ E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) "foo bar")
 
         V.EvKey V.KEsc [] -> M.halt cs
@@ -130,13 +130,16 @@ appEvent (CS lists focus tasks (Just editor)) (T.VtyEvent e) =
             M.continue $ CS lists focus tasks (Just newEditor)
 appEvent _ _ = error "FIXME: unhandled"
 
-deleteCurrentTask :: CurrentState -> CurrentState
-deleteCurrentTask (CS _ Lists (Just _) _) = error "invariant violation: focused on lists with tasks zipper"
-deleteCurrentTask (CS _ Tasks Nothing _) = error "invariant violation: focused on tasks with no tasks zipper"
-deleteCurrentTask (CS _ Tasks (Just (Z.Zipper (_:_) [])) _) = error "invariant violation: zipper with non empty left but empty right"
-deleteCurrentTask cs@(CS _ Lists Nothing _) = cs
-deleteCurrentTask cs@(CS _ Tasks (Just (Z.Zipper [] [])) _) = cs
-deleteCurrentTask (CS z Tasks (Just (Z.Zipper l (t:_))) _) = CS newListsZipper Tasks (Just newTasksZipper) Nothing
+deleteCurrentItem :: CurrentState -> CurrentState
+deleteCurrentItem (CS _ Lists (Just _) _) = error "invariant violation: focused on lists with tasks zipper"
+deleteCurrentItem (CS _ Tasks Nothing _) = error "invariant violation: focused on tasks with no tasks zipper"
+deleteCurrentItem (CS _ Tasks (Just (Z.Zipper (_:_) [])) _) = error "invariant violation: zipper with non empty left but empty right"
+deleteCurrentItem (CS (NEZ.Zipper [] (TL _ _) []) Lists Nothing _) = error "invariant violation: MyDay list does not exist"
+deleteCurrentItem cs@(CS (NEZ.Zipper _ MyDay _) Lists Nothing _) = cs
+deleteCurrentItem (CS (NEZ.Zipper l _ (x:xs)) Lists Nothing edit) = CS (NEZ.Zipper l x xs) Lists Nothing edit
+deleteCurrentItem (CS (NEZ.Zipper (x:xs) _ []) Lists Nothing edit) = CS (NEZ.Zipper xs x []) Lists Nothing edit
+deleteCurrentItem cs@(CS _ Tasks (Just (Z.Zipper [] [])) _) = cs
+deleteCurrentItem (CS z Tasks (Just (Z.Zipper l (t:_))) _) = CS newListsZipper Tasks (Just newTasksZipper) Nothing
     where
     newListsZipper = deleteTask (taskID t) z
     newTasksZipper = applyNTimes (length l) Z.goRight . Z.fromList . getCurrentTasks $ newListsZipper
