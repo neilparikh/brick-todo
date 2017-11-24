@@ -76,6 +76,12 @@ taskNames = map taskName . Z.toList
 currentListName :: NEZ.Zipper TodoList -> String
 currentListName = listToName . NEZ.curr
 
+nameForCurrentItem :: CurrentState -> String
+nameForCurrentItem (CS _ Lists (Just _) _) = error "invariant violation: focused on lists with tasks zipper"
+nameForCurrentItem (CS _ Tasks Nothing _) = error "invariant violation: focused on tasks with no tasks zipper"
+nameForCurrentItem (CS _ Tasks (Just tasks) _) = maybe "" id (fmap taskName $ Z.getCurrent tasks)
+nameForCurrentItem (CS lists Lists Nothing _) = currentListName lists
+
 drawUI :: CurrentState -> [Widget String]
 drawUI (CS z focus tasks editor) = [ui]
     where
@@ -118,7 +124,7 @@ appEvent cs@(CS lists focus tasks Nothing) (T.VtyEvent e) =
         V.EvKey (V.KChar 'h') [] -> M.continue . moveLeft $ cs
 
         V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentItem $ cs
-        V.EvKey (V.KChar 'e') [] -> M.continue $ CS lists focus tasks (Just $ E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) "foo bar")
+        V.EvKey (V.KChar 'e') [] -> M.continue $ CS lists focus tasks (Just $ E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) (nameForCurrentItem cs))
 
         V.EvKey V.KEsc [] -> M.halt cs
         _ -> M.continue cs
