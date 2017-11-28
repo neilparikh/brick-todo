@@ -1,4 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
@@ -29,6 +31,8 @@ import Brick.Util (on)
 import qualified NonEmptyZipper as NEZ
 import qualified Zipper as Z
 import qualified Data.Text.Zipper as TZ
+import GHC.Generics
+import Data.Generics.Product
 
 newtype ID = ID Int
     deriving (Eq, Enum)
@@ -54,6 +58,7 @@ data Focus = Lists
            deriving (Show, Eq)
 
 data CurrentState = CS (NEZ.Zipper TodoList) Focus (Maybe (Z.Zipper Task)) (Maybe (E.Editor String String))
+    deriving (Generic)
 
 listToName :: TodoList -> String
 listToName (TL name _) = name
