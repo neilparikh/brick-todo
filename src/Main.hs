@@ -147,7 +147,7 @@ appEvent cs@(CS _ _ Nothing) (T.VtyEvent e) =
 
         V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentItem $ cs
         V.EvKey (V.KChar 'e') [] -> let
-            focus = if isJust (cs ^. field @"csTasks") then Tasks else Lists
+            focus = if isJust (csTasks cs) then Tasks else Lists
             editor = E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) (nameForCurrentItem cs)
             in M.continue $ setEditorTo (Just editor) cs
 
@@ -198,7 +198,7 @@ moveLeft cs = cs & field @"csTasks" .~ Nothing
 moveRight :: CurrentState -> CurrentState
 moveRight cs = cs & field @"csTasks" .~ Just tasksZipper
     where
-    tasksZipper = Z.fromList . getCurrentTasks $ cs ^. field @"csLists"
+    tasksZipper = Z.fromList . getCurrentTasks $ csLists cs
 
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr
