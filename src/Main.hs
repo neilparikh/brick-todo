@@ -8,8 +8,12 @@
 module Main where
 
 import Control.Monad (void)
-import qualified Graphics.Vty as V
 
+import Lens.Micro
+import GHC.Generics
+import Data.Generics.Product
+
+import qualified Graphics.Vty as V
 import qualified Brick.Main as M
 import qualified Brick.Types as T
 import qualified Brick.Widgets.Border as B
@@ -34,9 +38,6 @@ import Brick.Util (on)
 import qualified NonEmptyZipper as NEZ
 import qualified Zipper as Z
 import qualified Data.Text.Zipper as TZ
-import Lens.Micro
-import GHC.Generics
-import Data.Generics.Product
 
 newtype ID = ID Int
     deriving (Eq, Enum)
@@ -94,7 +95,7 @@ currentListName = listToName . NEZ.curr
 nameForCurrentItem :: CurrentState -> String
 nameForCurrentItem (CS _ Lists (Just _) _) = error "invariant violation: focused on lists with tasks zipper"
 nameForCurrentItem (CS _ Tasks Nothing _) = error "invariant violation: focused on tasks with no tasks zipper"
-nameForCurrentItem (CS _ Tasks (Just tasks) _) = maybe "" id (fmap taskName $ Z.getCurrent tasks)
+nameForCurrentItem (CS _ Tasks (Just tasks) _) = maybe "" taskName (Z.getCurrent tasks)
 nameForCurrentItem (CS lists Lists Nothing _) = currentListName lists
 
 drawUI :: CurrentState -> [Widget String]
@@ -112,11 +113,11 @@ drawUI (CS z focus tasks editor) = [ui]
     box1 = B.borderWithLabel label1 $
           hLimit 25 $
           vLimit 15 $
-          vBox $ [L.renderList (\_ -> C.hCenter . str) (focus == Lists) listsWidget] ++ (if focus == Lists then [editWidget] else [])
+          vBox $ L.renderList (\_ -> C.hCenter . str) (focus == Lists) listsWidget : [editWidget | focus == Lists]
     box2 = B.borderWithLabel label2 $
           hLimit 25 $
           vLimit 15 $
-          vBox $ [L.renderList (\_ -> C.hCenter . str) (focus == Tasks) tasksWidget] ++ (if focus == Tasks then [editWidget] else [])
+          vBox $ L.renderList (\_ -> C.hCenter . str) (focus == Tasks) tasksWidget : [editWidget | focus == Tasks]
     emptyBox = B.border $
           hLimit 25 $
           vLimit 15 $
