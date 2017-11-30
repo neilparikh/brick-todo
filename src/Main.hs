@@ -185,11 +185,11 @@ updateCurrentItem (CS z (Just (Z.Zipper l (t:_))) edit) newName = CS newListsZip
     newTasksZipper = applyNTimes (length l) Z.goRight . Z.fromList . getCurrentTasks $ newListsZipper
 
 moveUp :: CurrentState -> CurrentState
-moveUp cs@(CS _ (Just tasksZipper) _) = cs & field @"csTasks" .~ (Just $ Z.goLeft tasksZipper)
+moveUp cs@(CS _ (Just _) _) = cs & field @"csTasks" %~ (fmap Z.goLeft)
 moveUp cs@(CS _ Nothing _) = cs & field @"csLists" %~ NEZ.goLeft
 
 moveDown :: CurrentState -> CurrentState
-moveDown cs@(CS _ (Just tasksZipper) _) = cs & field @"csTasks" .~ (Just $ Z.goRight tasksZipper)
+moveDown cs@(CS _ (Just _) _) = cs & field @"csTasks" %~ (fmap Z.goRight)
 moveDown cs@(CS _ Nothing _) = cs & field @"csLists" %~ NEZ.goRight
 
 moveLeft :: CurrentState -> CurrentState
