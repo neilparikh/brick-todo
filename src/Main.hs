@@ -1,6 +1,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
+
+-- FIXME: If you hit e when focused on an empty list, and then hit enter, will crash
 
 module Main where
 
@@ -31,6 +34,7 @@ import Brick.Util (on)
 import qualified NonEmptyZipper as NEZ
 import qualified Zipper as Z
 import qualified Data.Text.Zipper as TZ
+import Control.Lens
 import GHC.Generics
 import Data.Generics.Product
 
@@ -41,10 +45,13 @@ data Task = Task {
     taskID :: ID,
     taskName :: String,
     taskOnDay :: Bool
-}
+} deriving (Generic)
 
 data TodoList = TL String [Task]
               | MyDay
+
+applyNTimes :: Int -> (a -> a) -> a -> a
+applyNTimes n f = foldr (.) id (replicate n f)
 
 modifyTasks :: ([Task] -> [Task]) -> TodoList -> TodoList
 modifyTasks _ MyDay = MyDay
@@ -52,6 +59,9 @@ modifyTasks f (TL name tasks) = TL name (f tasks)
 
 deleteTask :: ID -> NEZ.Zipper TodoList -> NEZ.Zipper TodoList
 deleteTask i = fmap (modifyTasks (filter (\t -> taskID t /= i)))
+
+renameTask :: ID -> String -> NEZ.Zipper TodoList -> NEZ.Zipper TodoList
+renameTask i newName = fmap (modifyTasks (fmap (\t -> if taskID t == i then t & field @"taskName" .~ newName else t)))
 
 data Focus = Lists
            | Tasks
@@ -133,13 +143,17 @@ appEvent cs@(CS lists focus tasks Nothing) (T.VtyEvent e) =
 
         V.EvKey V.KEsc [] -> M.halt cs
         _ -> M.continue cs
-appEvent (CS lists focus tasks (Just editor)) (T.VtyEvent e) =
+appEvent cs@(CS lists focus tasks (Just editor)) (T.VtyEvent e) =
     case e of
         V.EvKey V.KEsc [] -> M.continue $ CS lists focus tasks Nothing
+        V.EvKey V.KEnter [] -> M.continue $ setEditorToNothing $ updateCurrentItem cs (mconcat $ E.getEditContents editor)
         e' -> do
             newEditor <- E.handleEditorEvent e' editor
             M.continue $ CS lists focus tasks (Just newEditor)
 appEvent _ _ = error "FIXME: unhandled"
+
+setEditorToNothing :: CurrentState -> CurrentState
+setEditorToNothing cs = cs & typed @(Maybe (E.Editor String String)) .~ Nothing
 
 deleteCurrentItem :: CurrentState -> CurrentState
 deleteCurrentItem (CS _ Lists (Just _) _) = error "invariant violation: focused on lists with tasks zipper"
@@ -150,11 +164,22 @@ deleteCurrentItem cs@(CS (NEZ.Zipper _ MyDay _) Lists Nothing _) = cs
 deleteCurrentItem (CS (NEZ.Zipper l _ (x:xs)) Lists Nothing edit) = CS (NEZ.Zipper l x xs) Lists Nothing edit
 deleteCurrentItem (CS (NEZ.Zipper (x:xs) _ []) Lists Nothing edit) = CS (NEZ.Zipper xs x []) Lists Nothing edit
 deleteCurrentItem cs@(CS _ Tasks (Just (Z.Zipper [] [])) _) = cs
-deleteCurrentItem (CS z Tasks (Just (Z.Zipper l (t:_))) _) = CS newListsZipper Tasks (Just newTasksZipper) Nothing
+deleteCurrentItem (CS z Tasks (Just (Z.Zipper l (t:_))) edit) = CS newListsZipper Tasks (Just newTasksZipper) edit
     where
     newListsZipper = deleteTask (taskID t) z
     newTasksZipper = applyNTimes (length l) Z.goRight . Z.fromList . getCurrentTasks $ newListsZipper
-    applyNTimes n f = foldr (.) id (replicate n f)
+
+updateCurrentItem :: CurrentState -> String -> CurrentState
+updateCurrentItem (CS _ Lists (Just _) _) _ = error "invariant violation: focused on lists with tasks zipper"
+updateCurrentItem (CS _ Tasks Nothing _) _ = error "invariant violation: focused on tasks with no tasks zipper"
+updateCurrentItem (CS _ Tasks (Just (Z.Zipper (_:_) [])) _) _ = error "invariant violation: zipper with non empty left but empty right"
+updateCurrentItem (CS _ Tasks (Just (Z.Zipper [] [])) _) _ = error "invariant violation: trying to update a non-existent task"
+updateCurrentItem cs@(CS (NEZ.Zipper _ MyDay _) Lists Nothing _) _ = cs
+updateCurrentItem cs@(CS (NEZ.Zipper _ (TL _ tasks) _) Lists Nothing _) newName = cs & typed @(NEZ.Zipper TodoList) %~ (NEZ.updateCurrent . const $ TL newName tasks)
+updateCurrentItem (CS z Tasks (Just (Z.Zipper l (t:_))) edit) newName = CS newListsZipper Tasks (Just newTasksZipper) edit
+    where
+    newListsZipper = renameTask (taskID t) newName z
+    newTasksZipper = applyNTimes (length l) Z.goRight . Z.fromList . getCurrentTasks $ newListsZipper
 
 moveUp :: CurrentState -> CurrentState
 moveUp (CS _ Lists (Just _) _) = error "invariant violation: focused on lists with tasks zipper"
