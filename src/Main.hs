@@ -51,6 +51,20 @@ data Task = Task {
 data TodoList = TL String [Task]
               | MyDay
 
+data Focus = Lists
+           | Tasks
+           deriving (Show, Eq)
+
+data CurrentState = CS {
+    csLists :: (NEZ.Zipper TodoList),
+    csFocus :: Focus,
+    csTasks :: (Maybe (Z.Zipper Task)),
+    csEditor :: (Maybe (E.Editor String String))
+} deriving (Generic)
+
+setEditorTo :: Maybe (E.Editor String String) -> CurrentState -> CurrentState
+setEditorTo e = field @"csEditor" .~ e
+
 applyNTimes :: Int -> (a -> a) -> a -> a
 applyNTimes n f = foldr (.) id (replicate n f)
 
@@ -63,13 +77,6 @@ deleteTask i = fmap (modifyTasks (filter (\t -> taskID t /= i)))
 
 renameTask :: ID -> String -> NEZ.Zipper TodoList -> NEZ.Zipper TodoList
 renameTask i newName = fmap (modifyTasks (fmap (\t -> if taskID t == i then t & field @"taskName" .~ newName else t)))
-
-data Focus = Lists
-           | Tasks
-           deriving (Show, Eq)
-
-data CurrentState = CS (NEZ.Zipper TodoList) Focus (Maybe (Z.Zipper Task)) (Maybe (E.Editor String String))
-    deriving (Generic)
 
 listToName :: TodoList -> String
 listToName (TL name _) = name
@@ -125,7 +132,7 @@ drawUI (CS z focus tasks editor) = [ui]
     ui = C.hCenter . C.vCenter $ hBox [box1 , if focus == Tasks then box2 else emptyBox]
 
 appEvent :: CurrentState -> T.BrickEvent String e -> T.EventM String (T.Next CurrentState)
-appEvent cs@(CS lists focus tasks Nothing) (T.VtyEvent e) =
+appEvent cs@(CS _ focus _ Nothing) (T.VtyEvent e) =
     case e of
         V.EvKey V.KUp []         -> M.continue . moveUp $ cs
         V.EvKey (V.KChar 'k') [] -> M.continue . moveUp $ cs
@@ -140,21 +147,20 @@ appEvent cs@(CS lists focus tasks Nothing) (T.VtyEvent e) =
         V.EvKey (V.KChar 'h') [] -> M.continue . moveLeft $ cs
 
         V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentItem $ cs
-        V.EvKey (V.KChar 'e') [] -> M.continue $ CS lists focus tasks (Just $ E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) (nameForCurrentItem cs))
+        V.EvKey (V.KChar 'e') [] -> let
+            editor = E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) (nameForCurrentItem cs)
+            in M.continue $ setEditorTo (Just editor) cs
 
         V.EvKey V.KEsc [] -> M.halt cs
         _ -> M.continue cs
-appEvent cs@(CS lists focus tasks (Just editor)) (T.VtyEvent e) =
+appEvent cs@(CS _ _ _ (Just editor)) (T.VtyEvent e) =
     case e of
-        V.EvKey V.KEsc [] -> M.continue $ CS lists focus tasks Nothing
-        V.EvKey V.KEnter [] -> M.continue $ setEditorToNothing $ updateCurrentItem cs (mconcat $ E.getEditContents editor)
+        V.EvKey V.KEsc [] -> M.continue $ setEditorTo Nothing $ cs
+        V.EvKey V.KEnter [] -> M.continue $ setEditorTo Nothing $ updateCurrentItem cs (mconcat $ E.getEditContents editor)
         e' -> do
-            newEditor <- E.handleEditorEvent e' editor
-            M.continue $ CS lists focus tasks (Just newEditor)
+            editor' <- E.handleEditorEvent e' editor
+            M.continue $ setEditorTo (Just editor') cs
 appEvent _ _ = error "FIXME: unhandled"
-
-setEditorToNothing :: CurrentState -> CurrentState
-setEditorToNothing cs = cs & typed @(Maybe (E.Editor String String)) .~ Nothing
 
 deleteCurrentItem :: CurrentState -> CurrentState
 deleteCurrentItem (CS _ Lists (Just _) _) = error "invariant violation: focused on lists with tasks zipper"
@@ -162,8 +168,8 @@ deleteCurrentItem (CS _ Tasks Nothing _) = error "invariant violation: focused o
 deleteCurrentItem (CS _ Tasks (Just (Z.Zipper (_:_) [])) _) = error "invariant violation: zipper with non empty left but empty right"
 deleteCurrentItem (CS (NEZ.Zipper [] (TL _ _) []) Lists Nothing _) = error "invariant violation: MyDay list does not exist"
 deleteCurrentItem cs@(CS (NEZ.Zipper _ MyDay _) Lists Nothing _) = cs
-deleteCurrentItem (CS (NEZ.Zipper l _ (x:xs)) Lists Nothing edit) = CS (NEZ.Zipper l x xs) Lists Nothing edit
-deleteCurrentItem (CS (NEZ.Zipper (x:xs) _ []) Lists Nothing edit) = CS (NEZ.Zipper xs x []) Lists Nothing edit
+deleteCurrentItem cs@(CS (NEZ.Zipper l _ (x:xs)) Lists Nothing _) = cs & field @"csLists" .~ (NEZ.Zipper l x xs)
+deleteCurrentItem cs@(CS (NEZ.Zipper (x:xs) _ []) Lists Nothing _) = cs & field @"csLists" .~ (NEZ.Zipper xs x [])
 deleteCurrentItem cs@(CS _ Tasks (Just (Z.Zipper [] [])) _) = cs
 deleteCurrentItem (CS z Tasks (Just (Z.Zipper l (t:_))) edit) = CS newListsZipper Tasks (Just newTasksZipper) edit
     where
@@ -176,7 +182,7 @@ updateCurrentItem (CS _ Tasks Nothing _) _ = error "invariant violation: focused
 updateCurrentItem (CS _ Tasks (Just (Z.Zipper (_:_) [])) _) _ = error "invariant violation: zipper with non empty left but empty right"
 updateCurrentItem (CS _ Tasks (Just (Z.Zipper [] [])) _) _ = error "invariant violation: trying to update a non-existent task"
 updateCurrentItem cs@(CS (NEZ.Zipper _ MyDay _) Lists Nothing _) _ = cs
-updateCurrentItem cs@(CS (NEZ.Zipper _ (TL _ tasks) _) Lists Nothing _) newName = cs & typed @(NEZ.Zipper TodoList) %~ (NEZ.updateCurrent . const $ TL newName tasks)
+updateCurrentItem cs@(CS (NEZ.Zipper _ (TL _ tasks) _) Lists Nothing _) newName = cs & field @"csLists" %~ (NEZ.updateCurrent . const $ TL newName tasks)
 updateCurrentItem (CS z Tasks (Just (Z.Zipper l (t:_))) edit) newName = CS newListsZipper Tasks (Just newTasksZipper) edit
     where
     newListsZipper = renameTask (taskID t) newName z
@@ -185,20 +191,22 @@ updateCurrentItem (CS z Tasks (Just (Z.Zipper l (t:_))) edit) newName = CS newLi
 moveUp :: CurrentState -> CurrentState
 moveUp (CS _ Lists (Just _) _) = error "invariant violation: focused on lists with tasks zipper"
 moveUp (CS _ Tasks Nothing _) = error "invariant violation: focused on tasks with no tasks zipper"
-moveUp (CS z Tasks (Just tasksZipper) _) = CS z Tasks (Just $ Z.goLeft tasksZipper) Nothing
-moveUp (CS z Lists Nothing _) = CS (NEZ.goLeft z) Lists Nothing Nothing
+moveUp cs@(CS _ Tasks (Just tasksZipper) _) = cs & field @"csTasks" .~ (Just $ Z.goLeft tasksZipper)
+moveUp cs@(CS _ Lists Nothing _) = cs & field @"csLists" %~ NEZ.goLeft
 
 moveDown :: CurrentState -> CurrentState
 moveDown (CS _ Lists (Just _) _) = error "invariant violation: focused on lists with tasks zipper"
 moveDown (CS _ Tasks Nothing _) = error "invariant violation: focused on tasks with no tasks zipper"
-moveDown (CS z Tasks (Just tasksZipper) _) = CS z Tasks (Just $ Z.goRight tasksZipper) Nothing
-moveDown (CS z Lists Nothing _) = CS (NEZ.goRight z) Lists Nothing Nothing
+moveDown cs@(CS _ Tasks (Just tasksZipper) _) = cs & field @"csTasks" .~ (Just $ Z.goRight tasksZipper)
+moveDown cs@(CS _ Lists Nothing _) = cs & field @"csLists" %~ NEZ.goRight
 
 moveLeft :: CurrentState -> CurrentState
-moveLeft (CS z _ _ _) = CS z Lists Nothing Nothing
+moveLeft cs = cs & field @"csFocus" .~ Lists & field @"csTasks" .~ Nothing
 
 moveRight :: CurrentState -> CurrentState
-moveRight (CS z _ _ _) = CS z Tasks (Just . Z.fromList . getCurrentTasks $ z) Nothing
+moveRight cs = cs & field @"csFocus" .~ Tasks & field @"csTasks" .~ Just tasksZipper
+    where
+    tasksZipper = Z.fromList . getCurrentTasks $ cs ^. field @"csLists"
 
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr
