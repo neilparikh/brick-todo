@@ -34,7 +34,7 @@ import Brick.Util (on)
 import qualified NonEmptyZipper as NEZ
 import qualified Zipper as Z
 import qualified Data.Text.Zipper as TZ
-import Control.Lens
+import Lens.Micro
 import GHC.Generics
 import Data.Generics.Product
 
