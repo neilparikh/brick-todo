@@ -57,9 +57,9 @@ data Focus = Lists
            deriving (Show, Eq)
 
 data CurrentState = CS {
-    csLists :: (NEZ.Zipper TodoList),
-    csTasks :: (Maybe (Z.Zipper Task)),
-    csEditor :: (Maybe (E.Editor String String))
+    csLists :: NEZ.Zipper TodoList,
+    csTasks :: Maybe (Z.Zipper Task),
+    csEditor :: Maybe (E.Editor String String)
 } deriving (Generic)
 
 setEditorTo :: Maybe (E.Editor String String) -> CurrentState -> CurrentState
@@ -155,7 +155,7 @@ appEvent cs@(CS _ _ Nothing) (T.VtyEvent e) =
         _ -> M.continue cs
 appEvent cs@(CS _ _ (Just editor)) (T.VtyEvent e) =
     case e of
-        V.EvKey V.KEsc [] -> M.continue $ setEditorTo Nothing $ cs
+        V.EvKey V.KEsc [] -> M.continue $ setEditorTo Nothing cs
         V.EvKey V.KEnter [] -> M.continue $ setEditorTo Nothing $ updateCurrentItem cs (mconcat $ E.getEditContents editor)
         e' -> do
             editor' <- E.handleEditorEvent e' editor
@@ -166,8 +166,8 @@ deleteCurrentItem :: CurrentState -> CurrentState
 deleteCurrentItem (CS _ (Just (Z.Zipper (_:_) [])) _) = error "invariant violation: zipper with non empty left but empty right"
 deleteCurrentItem (CS (NEZ.Zipper [] (TL _ _) []) Nothing _) = error "invariant violation: MyDay list does not exist"
 deleteCurrentItem cs@(CS (NEZ.Zipper _ MyDay _) Nothing _) = cs
-deleteCurrentItem cs@(CS (NEZ.Zipper l _ (x:xs)) Nothing _) = cs & field @"csLists" .~ (NEZ.Zipper l x xs)
-deleteCurrentItem cs@(CS (NEZ.Zipper (x:xs) _ []) Nothing _) = cs & field @"csLists" .~ (NEZ.Zipper xs x [])
+deleteCurrentItem cs@(CS (NEZ.Zipper l _ (x:xs)) Nothing _) = cs & field @"csLists" .~ NEZ.Zipper l x xs
+deleteCurrentItem cs@(CS (NEZ.Zipper (x:xs) _ []) Nothing _) = cs & field @"csLists" .~ NEZ.Zipper xs x []
 deleteCurrentItem cs@(CS _ (Just (Z.Zipper [] [])) _) = cs
 deleteCurrentItem (CS z (Just (Z.Zipper l (t:_))) edit) = CS newListsZipper (Just newTasksZipper) edit
     where
@@ -185,11 +185,11 @@ updateCurrentItem (CS z (Just (Z.Zipper l (t:_))) edit) newName = CS newListsZip
     newTasksZipper = applyNTimes (length l) Z.goRight . Z.fromList . getCurrentTasks $ newListsZipper
 
 moveUp :: CurrentState -> CurrentState
-moveUp cs@(CS _ (Just _) _) = cs & field @"csTasks" %~ (fmap Z.goLeft)
+moveUp cs@(CS _ (Just _) _) = cs & field @"csTasks" %~ fmap Z.goLeft
 moveUp cs@(CS _ Nothing _) = cs & field @"csLists" %~ NEZ.goLeft
 
 moveDown :: CurrentState -> CurrentState
-moveDown cs@(CS _ (Just _) _) = cs & field @"csTasks" %~ (fmap Z.goRight)
+moveDown cs@(CS _ (Just _) _) = cs & field @"csTasks" %~ fmap Z.goRight
 moveDown cs@(CS _ Nothing _) = cs & field @"csLists" %~ NEZ.goRight
 
 moveLeft :: CurrentState -> CurrentState
