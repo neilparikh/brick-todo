@@ -3,8 +3,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
 
--- FIXME: If you hit e when focused on an empty list, and then hit enter, will crash
-
 module Main where
 
 import Control.Monad (void)
@@ -146,10 +144,12 @@ appEvent cs@(CS _ _ Nothing) (T.VtyEvent e) =
         V.EvKey (V.KChar 'h') [] -> M.continue . moveLeft $ cs
 
         V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentItem $ cs
-        V.EvKey (V.KChar 'e') [] -> let
-            focus = if isJust (csTasks cs) then Tasks else Lists
-            editor = E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) (nameForCurrentItem cs)
-            in M.continue $ setEditorTo (Just editor) cs
+        V.EvKey (V.KChar 'e') [] -> case (csTasks cs) of
+            Just (Z.Zipper [] []) -> M.continue cs
+            _ -> let
+                focus = if isJust (csTasks cs) then Tasks else Lists
+                editor = E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) (nameForCurrentItem cs)
+                in M.continue $ setEditorTo (Just editor) cs
 
         V.EvKey V.KEsc [] -> M.halt cs
         _ -> M.continue cs
