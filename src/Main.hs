@@ -6,7 +6,6 @@
 module Main where
 
 import Control.Monad (void)
-import Data.Maybe (isJust)
 
 import Lens.Micro
 import GHC.Generics
@@ -60,6 +59,10 @@ data CurrentState = CS {
     csEditor :: Maybe (E.Editor String String)
 } deriving (Generic)
 
+csFocus :: CurrentState -> Focus
+csFocus (CS _ Nothing _) = Lists
+csFocus (CS _ (Just _) _) = Tasks
+
 setEditorTo :: Maybe (E.Editor String String) -> CurrentState -> CurrentState
 setEditorTo e = field @"csEditor" .~ e
 
@@ -102,9 +105,9 @@ nameForCurrentItem (CS _ (Just tasks) _) = maybe "" taskName (Z.getCurrent tasks
 nameForCurrentItem (CS lists Nothing _) = currentListName lists
 
 drawUI :: CurrentState -> [Widget String]
-drawUI (CS z tasks editor) = [ui]
+drawUI cs@(CS z tasks editor) = [ui]
     where
-    focus = if isJust tasks then Tasks else Lists
+    focus = csFocus cs
     listsWidget = L.listMoveBy (NEZ.offset z) $ L.list "Lists" (Vec.fromList . listNames $ z) 1
     tasksWidget = case tasks of
         Just tasksZipper -> L.listMoveBy (Z.offset tasksZipper) $ L.list (currentListName z) (Vec.fromList . taskNames $ tasksZipper) 1
@@ -144,10 +147,11 @@ appEvent cs@(CS _ _ Nothing) (T.VtyEvent e) =
         V.EvKey (V.KChar 'h') [] -> M.continue . moveLeft $ cs
 
         V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentItem $ cs
-        V.EvKey (V.KChar 'e') [] -> case (csTasks cs) of
+
+        V.EvKey (V.KChar 'e') [] -> case csTasks cs of
             Just (Z.Zipper [] []) -> M.continue cs
             _ -> let
-                focus = if isJust (csTasks cs) then Tasks else Lists
+                focus = csFocus cs
                 editor = E.applyEdit TZ.gotoEOL $ E.editor ("edit " ++ show focus) (Just 1) (nameForCurrentItem cs)
                 in M.continue $ setEditorTo (Just editor) cs
 
