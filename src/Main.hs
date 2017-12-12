@@ -83,6 +83,9 @@ deleteTask i = fmap (modifyTasks (filter (\t -> taskID t /= i)))
 renameTask :: ID -> String -> NEZ.Zipper TodoList -> NEZ.Zipper TodoList
 renameTask i newName = fmap (modifyTasks (fmap (\t -> if taskID t == i then t & field @"taskName" .~ newName else t)))
 
+markTask :: ID -> NEZ.Zipper TodoList -> NEZ.Zipper TodoList
+markTask i = fmap (modifyTasks (fmap (\t -> if taskID t == i then t & field @"taskOnDay" %~ not else t)))
+
 listToName :: TodoList -> String
 listToName (TL name _) = name
 listToName MyDay = "My Day"
@@ -100,6 +103,9 @@ listNames = map listToName . NEZ.toList
 
 taskNames :: Z.Zipper Task -> [String]
 taskNames = map taskName . Z.toList
+
+addMark :: Z.Zipper Task -> Z.Zipper Task
+addMark = fmap (\t -> if taskOnDay t then t & field @"taskName" %~ ("* " ++) else t)
 
 currentListName :: NEZ.Zipper TodoList -> String
 currentListName = listToName . NEZ.curr
@@ -120,7 +126,7 @@ drawUI cs@(CS z tasks editor _) = [ui]
     focus = csFocus cs
     listsWidget = L.listMoveBy (NEZ.offset z) $ L.list "Lists" (Vec.fromList . listNames $ z) 1
     tasksWidget = case tasks of
-        Just tasksZipper -> L.listMoveBy (Z.offset tasksZipper) $ L.list (currentListName z) (Vec.fromList . taskNames $ tasksZipper) 1
+        Just tasksZipper -> L.listMoveBy (Z.offset tasksZipper) $ L.list (currentListName z) (Vec.fromList . taskNames . addMark $ tasksZipper) 1
         Nothing -> L.list "Tasks" (Vec.fromList []) 1
     editWidget = case editor of
         Just editor' -> E.renderEditor (str . unlines) True editor'
@@ -157,6 +163,8 @@ appEvent cs@(CS _ _ Nothing _) (T.VtyEvent e) =
         V.EvKey (V.KChar 'h') [] -> M.continue . moveLeft $ cs
 
         V.EvKey (V.KChar 'd') [] -> M.continue . deleteCurrentItem $ cs
+
+        V.EvKey (V.KChar 'm') [] -> M.continue . markCurrentItem $ cs
 
         V.EvKey (V.KChar 'a') [] -> M.continue . addNewItem $ cs
 
@@ -201,6 +209,15 @@ deleteCurrentItem cs@(CS _ (Just (Z.Zipper [] [])) _ _) = cs
 deleteCurrentItem (CS z (Just (Z.Zipper l (t:_))) edit newID) = CS newListsZipper (Just newTasksZipper) edit newID
     where
     newListsZipper = deleteTask (taskID t) z
+    newTasksZipper = applyNTimes (length l) Z.goRight . Z.fromList . getCurrentTasks $ newListsZipper
+
+markCurrentItem :: CurrentState -> CurrentState
+markCurrentItem (CS _ (Just (Z.Zipper (_:_) [])) _ _) = error "invariant violation: zipper with non empty left but empty right"
+markCurrentItem cs@(CS _ Nothing _ _) = cs
+markCurrentItem cs@(CS _ (Just (Z.Zipper [] [])) _ _) = cs
+markCurrentItem (CS z (Just (Z.Zipper l (t:_))) edit newID) = CS newListsZipper (Just newTasksZipper) edit newID
+    where
+    newListsZipper = markTask (taskID t) z
     newTasksZipper = applyNTimes (length l) Z.goRight . Z.fromList . getCurrentTasks $ newListsZipper
 
 updateCurrentItem :: CurrentState -> String -> CurrentState
