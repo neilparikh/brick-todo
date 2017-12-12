@@ -26,4 +26,5 @@ executable brick-todo
                        generic-lens,
                        vty,
                        vector,
-                       text-zipper
+                       text-zipper,
+                       cereal

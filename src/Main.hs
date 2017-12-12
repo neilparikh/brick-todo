@@ -6,11 +6,16 @@
 module Main where
 
 import Control.Monad (void)
-
-import Lens.Micro
 import GHC.Generics
+
+-- lens
+import Lens.Micro
 import Data.Generics.Product
 
+-- cereal
+import Data.Serialize (Serialize)
+
+-- Brick
 import qualified Graphics.Vty as V
 import qualified Brick.Main as M
 import qualified Brick.Types as T
@@ -33,12 +38,13 @@ import Brick.Widgets.Core
   )
 import Brick.Util (on)
 
+-- Zipper
 import qualified NonEmptyZipper as NEZ
 import qualified Zipper as Z
 import qualified Data.Text.Zipper as TZ
 
 newtype ID = ID Int
-    deriving (Eq, Enum)
+    deriving (Eq, Enum, Generic)
 
 data Task = Task {
     taskID :: ID,
@@ -48,6 +54,7 @@ data Task = Task {
 
 data TodoList = TL String [Task]
               | MyDay
+              deriving (Generic)
 
 data Focus = Lists
            | Tasks
@@ -59,6 +66,20 @@ data CurrentState = CS {
     csEditor :: Maybe (E.Editor String String),
     nextID :: ID
 } deriving (Generic)
+
+data FileState = FileState [TodoList] ID
+    deriving (Generic)
+
+instance Serialize ID
+instance Serialize Task
+instance Serialize TodoList
+instance Serialize FileState
+
+currentStateToFileState :: CurrentState -> FileState
+currentStateToFileState cs = FileState (NEZ.toList . csLists $ cs) (nextID cs)
+
+fileStateToCurrentState :: FileState -> CurrentState
+fileStateToCurrentState (FileState lists newID) = CS (NEZ.fromList lists) Nothing Nothing newID
 
 csFocus :: CurrentState -> Focus
 csFocus (CS _ Nothing _ _) = Lists
@@ -262,26 +283,9 @@ theApp =
           , M.appAttrMap = const theMap
           }
 
-foo :: Task
-foo = Task (ID 1) "Foo" True
-
-bar :: Task
-bar = Task (ID 2) "Bar" False
-
-baz :: Task
-baz = Task (ID 3) "Baz" True
-
-blah :: Task
-blah = Task (ID 4) "Blah" False
-
-listTodo :: TodoList
-listTodo = TL "Todo" [foo, bar, blah]
-
-listProjects :: TodoList
-listProjects = TL "Projects" [baz]
-
-initialState :: CurrentState
-initialState = CS (NEZ.Zipper [MyDay] listTodo [listProjects]) Nothing Nothing (ID 5)
+emptyState :: FileState
+emptyState = FileState [MyDay, TL "Todo" []] (ID 1)
 
 main :: IO ()
-main = void $ M.defaultMain theApp initialState
+main = do
+    void $ M.defaultMain theApp (fileStateToCurrentState emptyState)
