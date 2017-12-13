@@ -5,15 +5,16 @@
 
 module Main where
 
-import Control.Monad (void)
 import GHC.Generics
+import System.Directory (doesFileExist)
 
 -- lens
 import Lens.Micro
 import Data.Generics.Product
 
 -- cereal
-import Data.Serialize (Serialize)
+import qualified Data.ByteString as BS (readFile, writeFile)
+import Data.Serialize (Serialize, decode, encode)
 
 -- Brick
 import qualified Graphics.Vty as V
@@ -288,4 +289,14 @@ emptyState = FileState [MyDay, TL "Todo" []] (ID 1)
 
 main :: IO ()
 main = do
-    void $ M.defaultMain theApp (fileStateToCurrentState emptyState)
+    let fileName = "/Users/nparikh/brick_todo.data"
+    fileExists <- doesFileExist fileName
+    newState <- if fileExists
+    then do
+        contents <- BS.readFile fileName
+        case decode contents of
+            Left err -> error err
+            Right state -> M.defaultMain theApp (fileStateToCurrentState state)
+    else do
+        M.defaultMain theApp (fileStateToCurrentState emptyState)
+    BS.writeFile fileName $ encode . currentStateToFileState $ newState

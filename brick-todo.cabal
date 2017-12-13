@@ -27,4 +27,6 @@ executable brick-todo
                        vty,
                        vector,
                        text-zipper,
-                       cereal
+                       cereal,
+                       bytestring,
+                       directory
