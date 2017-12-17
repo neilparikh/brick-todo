@@ -1,0 +1,2 @@
+- [ ] save to file on every operation that changes the state (edit, mark, delete and add)
+- [ ] wrap todos that are too long to multiple lines
