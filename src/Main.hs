@@ -219,7 +219,7 @@ addNewItem cs@(CS (NEZ.Zipper _ (TL name tasks) _) (Just tasksZipper) _ newID) =
     where
     newTask = Task newID " " False
     newList = TL name (insertAtPosition offset newTask tasks)
-    offset = (Z.offset tasksZipper) + 1
+    offset = Z.offset tasksZipper + 1
 -- FIXME: figure out how to add items to the my day list
 addNewItem cs@(CS (NEZ.Zipper _ MyDay _) (Just _) _ _) = cs
 
@@ -299,6 +299,5 @@ main = do
         case decode contents of
             Left err -> error err
             Right state -> M.defaultMain theApp (fileStateToCurrentState state)
-    else do
-        M.defaultMain theApp (fileStateToCurrentState emptyState)
+    else M.defaultMain theApp (fileStateToCurrentState emptyState)
     BS.writeFile fileName $ encode . currentStateToFileState $ newState
