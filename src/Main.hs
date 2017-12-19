@@ -31,11 +31,13 @@ import Brick.Types
   )
 import Brick.Widgets.Core
   ( str
+  , strWrap
   , vLimit
   , hLimit
   , hBox
   , vBox
   , fill
+  , padLeftRight
   )
 import Brick.Util (on)
 
@@ -162,7 +164,7 @@ drawUI cs@(CS z tasks editor _) = [ui]
     box2 = B.borderWithLabel label2 $
           hLimit 25 $
           vLimit 15 $
-          vBox $ L.renderList (\_ -> C.hCenter . str) (focus == Tasks) tasksWidget : [editWidget | focus == Tasks]
+          vBox $ L.renderList (\_ -> padLeftRight 1 . C.hCenter . strWrap) (focus == Tasks) tasksWidget : [editWidget | focus == Tasks]
     emptyBox = B.border $
           hLimit 25 $
           vLimit 15 $
