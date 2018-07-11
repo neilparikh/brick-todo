@@ -158,16 +158,16 @@ drawUI cs@(CS z tasks editor _) = [ui]
     label1 = str "Lists"
     label2 = str . currentListName $ z
     box1 = B.borderWithLabel label1 $
-          hLimit 25 $
-          vLimit 15 $
+          hLimit 40 $
+          vLimit 30 $
           vBox $ L.renderList (\_ -> C.hCenter . str) (focus == Lists) listsWidget : [editWidget | focus == Lists]
     box2 = B.borderWithLabel label2 $
-          hLimit 25 $
-          vLimit 15 $
+          hLimit 40 $
+          vLimit 30 $
           vBox $ L.renderList (\_ -> padLeftRight 1 . C.hCenter . strWrap) (focus == Tasks) tasksWidget : [editWidget | focus == Tasks]
     emptyBox = B.border $
-          hLimit 25 $
-          vLimit 15 $
+          hLimit 40 $
+          vLimit 30 $
           fill ' '
     ui = C.hCenter . C.vCenter $ hBox [box1 , if focus == Tasks then box2 else emptyBox]
 
